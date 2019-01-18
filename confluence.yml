@@ -1,0 +1,119 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: confluence
+spec:
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: 8091
+      targetPort: synchrony
+      protocol: TCP
+      name: synchrony
+  selector:
+    app: confluence
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: confluence
+  labels:
+    app: confluence
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: confluence
+  template:
+    metadata:
+      labels:
+        app: confluence
+    spec:
+      containers:
+        - name: confluence
+          image: atlassian/confluence-server:6.13.0
+          env:
+            - name: CATALINA_CONNECTOR_PROXYNAME
+              value: "confluence.skypony.sethitow.com"
+            - name: CATALINA_CONNECTOR_PROXYPORT
+              value: "443"
+            - name: CATALINA_CONNECTOR_SCHEME
+              value: "https"
+            - name: CATALINA_CONNECTOR_SECURE
+              value: "true"
+            # - name: JVM_MINIMUM_MEMORY
+            #   value: "512m"
+            # - name: JVM_MAXIMUM_MEMORY
+            #   value: "1028m"
+            # - name: JVM_SUPPORT_RECOMMENDED_ARGS
+            #   value: "-XX:MaxMetaspaceSize=512m -XX:MaxDirectMemorySize=10m -Dsynchrony.memory.max=0"
+          ports:
+            - name: http
+              containerPort: 8090
+              protocol: TCP
+            - name: synchrony
+              containerPort: 8091
+              protocol: TCP
+          # livenessProbe:
+          #   tcpSocket:
+          #     port: http
+          #   initialDelaySeconds: 60
+          #   periodSeconds: 15
+          #   timeoutSeconds: 3
+          # readinessProbe:
+          #   tcpSocket:
+          #     port: http
+          #   initialDelaySeconds: 30
+          #   periodSeconds: 15
+          #   timeoutSeconds: 3
+          volumeMounts:
+            - name: data
+              mountPath: /var/atlassian/application-data/confluence          
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: confluence-pvc
+          # emptyDir: {}
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: confluence-pvc
+  labels:
+    app: confluence
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 4Gi
+  storageClassName: do-block-storage
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: confluence
+  labels:
+    app: confluence
+  annotations:
+      kubernetes.io/ingress.class: nginx
+      certmanager.k8s.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+    - hosts:
+      - confluence.skypony.sethitow.com
+      secretName: letsencrypt-prod
+  rules:
+    - host: confluence.skypony.sethitow.com
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: confluence
+              servicePort: http
+          - path: /synchrony
+            backend:
+              serviceName: confluence
+              servicePort: synchrony
