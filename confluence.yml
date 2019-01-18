@@ -75,7 +75,6 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: confluence-pvc
-          # emptyDir: {}
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
@@ -89,7 +88,6 @@ spec:
   resources:
     requests:
       storage: 4Gi
-  storageClassName: do-block-storage
 ---
 apiVersion: extensions/v1beta1
 kind: Ingress
